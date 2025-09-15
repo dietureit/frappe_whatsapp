@@ -210,6 +210,16 @@ class WhatsAppNotification(Document):
                         }
                     }]
                 })
+            elif template.header_type == 'VIDEO' and self.header_link:
+                data['template']['components'].append({
+                    "type": "header",
+                    "parameters": [{
+                        "type": "video",
+                        "video": {
+                            "link": self.header_link
+                        }
+                    }]
+                })
             self.content_type = template.header_type.lower()
 
             self.notify(data, doc_data)
@@ -232,13 +242,30 @@ class WhatsAppNotification(Document):
                 headers=headers, data=json.dumps(data)
             )
 
+
             if not self.get("content_type"):
                 self.content_type = 'text'
 
             parameters = None
-            if data["template"]["components"]:
-                parameters = [param["text"] for param in data["template"]["components"][0]["parameters"]]
-                parameters = frappe.json.dumps(parameters, default=str)
+            components = (data.get("template") or {}).get("components", []) or []
+
+            # find BODY component (header-only templates won't have one)
+            body_comp = next((c for c in components if c.get("type") == "body"), None)
+
+            if body_comp:
+                params_list = []
+                for p in body_comp.get("parameters", []) or []:
+                    ptype = p.get("type")
+                    if ptype == "text":
+                        params_list.append(p.get("text", ""))
+                    elif ptype in ("currency", "date_time"):
+                        # keep structured values if you use them in templates
+                        params_list.append(p.get(ptype, {}))
+                    else:
+                        # unknown type; store raw for debugging or provider parity
+                        params_list.append(p)
+                parameters = frappe.json.dumps(params_list, default=str)
+
 
             new_doc = {
                 "doctype": "WhatsApp Message",
