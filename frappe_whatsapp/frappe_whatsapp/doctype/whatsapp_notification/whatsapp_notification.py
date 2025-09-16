@@ -126,7 +126,13 @@ class WhatsAppNotification(Document):
             if self.fields:
                 parameters = []
                 for field in self.fields:
-                    if isinstance(doc, Document):
+                    print("Field:", field.field_name)
+                    if field.field_name == "Yosra":
+                        print("Special case for Yosra")
+                        value = "Yosra"
+                    elif field.field_name == "today()+5":
+                        value = str(add_to_date(nowdate(), days=5))
+                    elif isinstance(doc, Document):
                         # get field with prettier value.
                         value = doc.get_formatted(field.field_name)
                     else: 
@@ -143,6 +149,8 @@ class WhatsAppNotification(Document):
                     "type": "body",
                     "parameters": parameters
                 }]
+
+                print(f"Parameters: {parameters}")
 
             if self.attach_document_print:
                 # frappe.db.begin()
