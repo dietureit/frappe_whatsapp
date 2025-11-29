@@ -28,6 +28,7 @@ class WhatsAppMessage(Document):
                 data[self.content_type.lower()] = {
                     "link": link,
                     "caption": self.message,
+                    "filename": self.filename if self.filename else None,
                 }
             elif self.content_type == "reaction":
                 data["reaction"] = {
@@ -38,7 +39,10 @@ class WhatsAppMessage(Document):
                 data["text"] = {"preview_url": True, "body": self.message}
 
             elif self.content_type == "audio":
-                data["text"] = {"link": link}
+                data["audio"] = {"link": link}
+            elif self.content_type == "interactive":
+                data["type"] = "interactive"
+                data["interactive"] = json.loads(self.body_param)             
 
             try:
                 self.notify(data)

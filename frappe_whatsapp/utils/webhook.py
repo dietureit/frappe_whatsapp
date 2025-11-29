@@ -200,7 +200,7 @@ def update_message_status(data):
 	status = data['statuses'][0]['status']
 	conversation = data['statuses'][0].get('conversation', {}).get('id')
 	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id})
-
+	frappe.set_user("Administrator")
 	doc = frappe.get_doc("WhatsApp Message", name)
 	doc.status = status
 	if conversation:

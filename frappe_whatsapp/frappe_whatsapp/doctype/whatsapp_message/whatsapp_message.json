@@ -23,6 +23,7 @@
   "conversation_id",
   "content_type",
   "attach",
+  "filename",
   "body_param",
   "section_break_iyjf",
   "is_reply",
@@ -134,7 +135,7 @@
    "fieldname": "content_type",
    "fieldtype": "Select",
    "label": "Content Type",
-   "options": "text\ndocument\nimage\nvideo\naudio\nflow\nreaction\nlocation\ncontact\nbutton",
+   "options": "text\ndocument\nimage\nvideo\naudio\nflow\nreaction\nlocation\ncontact\nbutton\ninteractive",
    "reqd": 1
   },
   {
@@ -143,6 +144,17 @@
    "fieldname": "attach",
    "fieldtype": "Attach",
    "label": "Attach"
+  },
+  {
+   "depends_on": "eval:(doc.content_type =='document');",
+   "fieldname": "filename",
+   "fieldtype": "Data",
+   "label": "Filename"
+  },
+  {
+   "fieldname": "body_param",
+   "fieldtype": "JSON",
+   "label": "Body Param"
   },
   {
    "fieldname": "section_break_iyjf",
@@ -190,11 +202,6 @@
    "fieldtype": "Data",
    "label": "Profile Name",
    "read_only": 1
-  },
-  {
-   "fieldname": "body_param",
-   "fieldtype": "JSON",
-   "label": "Body Param"
   }
  ],
  "index_web_pages_for_search": 1,
