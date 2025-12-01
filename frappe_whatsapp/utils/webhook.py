@@ -83,17 +83,57 @@ def post():
 					"profile_name":sender_profile_name
 				}).insert(ignore_permissions=True)
 			elif message_type == 'interactive':
-				frappe.get_doc({
-					"doctype": "WhatsApp Message",
-					"type": "Incoming",
-					"from": message['from'],
-					"message": message['interactive']['nfm_reply']['response_json'],
-					"message_id": message['id'],
-					"reply_to_message_id": reply_to_message_id,
-					"is_reply": is_reply,
-					"content_type": "flow",
-					"profile_name":sender_profile_name
-				}).insert(ignore_permissions=True)
+				interactive = message.get("interactive") or {}
+				if interactive.get("nfm_reply"):
+					frappe.get_doc({
+						"doctype": "WhatsApp Message",
+						"type": "Incoming",
+						"from": message['from'],
+						"message": interactive['nfm_reply']['response_json'],
+						"message_id": message['id'],
+						"reply_to_message_id": reply_to_message_id,
+						"is_reply": is_reply,
+						"content_type": "flow",
+						"profile_name":sender_profile_name
+					}).insert(ignore_permissions=True)
+				elif interactive.get("button_reply"):
+					br = interactive["button_reply"]
+					button_id = br.get("id") or br.get("payload")
+					button_title = br.get("title") or button_id
+					frappe.get_doc({
+						"doctype": "WhatsApp Message",
+						"type": "Incoming",
+						"from": message['from'],
+						"message": button_title,
+						"body_param": json.dumps({
+							"button_id": button_id,
+							"button_title": button_title,
+						}),
+						"message_id": message['id'],
+						"reply_to_message_id": reply_to_message_id,
+						"is_reply": is_reply,
+						"content_type": "interactive",
+						"profile_name":sender_profile_name
+					}).insert(ignore_permissions=True)
+				elif interactive.get("list_reply"):
+					lr = interactive["list_reply"]
+					list_id = lr.get("id")
+					list_title = lr.get("title") or list_id
+					frappe.get_doc({
+						"doctype": "WhatsApp Message",
+						"type": "Incoming",
+						"from": message['from'],
+						"message": list_title,
+						"body_param": json.dumps({
+							"list_id": list_id,
+							"list_title": list_title,
+						}),
+						"message_id": message['id'],
+						"reply_to_message_id": reply_to_message_id,
+						"is_reply": is_reply,
+						"content_type": "interactive",
+						"profile_name":sender_profile_name
+					}).insert(ignore_permissions=True)
 			elif message_type in ["image", "audio", "video", "document"]:
 				settings = frappe.get_doc(
 							"WhatsApp Settings", "WhatsApp Settings",
