@@ -14,9 +14,10 @@ def webhook():
 		return get()
 	return post()
 
-
+@frappe.whitelist()
 def get():
 	"""Get."""
+	print(frappe.local.form_dict)
 	hub_challenge = frappe.form_dict.get("hub.challenge")
 	webhook_verify_token = frappe.db.get_single_value(
 		"WhatsApp Settings", "webhook_verify_token"
@@ -26,10 +27,11 @@ def get():
 		frappe.throw("Verify token does not match")
 
 	return Response(hub_challenge, status=200)
-
+@frappe.whitelist(allow_guest=True)
 def post():
 	"""Post."""
 	data = frappe.local.form_dict
+	print(data)
 	frappe.get_doc({
 		"doctype": "WhatsApp Notification Log",
 		"template": "Webhook",
@@ -156,6 +158,52 @@ def post():
 					"is_reply": is_reply,
 					"content_type": message_type,
 					"profile_name":sender_profile_name
+				}).insert(ignore_permissions=True)
+    
+			elif message_type == "order":
+				order_data = message.get("order")
+				if not order_data:
+					return
+				from_phone = message.get("from")
+				whatsapp_users = frappe.get_all("WhatsApp User", filters={"phone_number": from_phone}, fields=["name", "event"])
+				if not whatsapp_users:
+					frappe.log_error("No WhatsApp User for phone: " + from_phone, "Order Handling")
+					return
+				user = whatsapp_users[0]
+				order_doc = frappe.new_doc("Order")
+				order_doc.customer = user.name
+				order_doc.event = user.event
+				order_doc.status = "Pending"
+				order_doc.order_time = frappe.utils.now_datetime()
+				total = 0.0
+				for item in order_data.get("product_items", []):
+					retailer_id = item.get("product_retailer_id")
+					if not retailer_id:
+						continue
+					menu_item = frappe.db.get_value("Menu Item", retailer_id, ["item_name", "price"], as_dict=True)
+					if not menu_item:
+						continue
+					qty = int(item.get("quantity", 1))
+					item_price = float(item.get("item_price", 0))
+					amount = qty * item_price
+					total += amount
+					order_doc.append("order_items", {
+						"menu_item": retailer_id,
+						"item_name": menu_item.item_name,
+						"qty": qty,
+						"rate": item_price,
+						"amount": amount
+					})
+				order_doc.total_amount = total
+				order_doc.insert(ignore_permissions=True)
+				frappe.get_doc({
+					"doctype": "WhatsApp Message",
+					"type": "Incoming",
+					"from": from_phone,
+					"message_id": message['id'],
+					"content_type": "order",
+					"message": json.dumps(order_data),
+					"profile_name": sender_profile_name or ""
 				}).insert(ignore_permissions=True)
 			else:
 				frappe.get_doc({

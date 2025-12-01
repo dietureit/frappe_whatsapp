@@ -11,7 +11,7 @@ class WhatsAppMessage(Document):
 
     def before_insert(self):
         """Send message."""
-        if self.type == "Outgoing" and self.message_type != "Template":
+        if self.type == "Outgoing" and self.message_type != "Template" and not self.skip:
             if self.attach and not self.attach.startswith("http"):
                 link = frappe.utils.get_url() + "/" + self.attach
             else:

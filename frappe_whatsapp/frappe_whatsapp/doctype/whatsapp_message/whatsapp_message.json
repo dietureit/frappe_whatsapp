@@ -23,8 +23,8 @@
   "conversation_id",
   "content_type",
   "attach",
-  "filename",
   "body_param",
+  "skip",
   "section_break_iyjf",
   "is_reply",
   "reply_to_message_id",
@@ -135,7 +135,7 @@
    "fieldname": "content_type",
    "fieldtype": "Select",
    "label": "Content Type",
-   "options": "text\ndocument\nimage\nvideo\naudio\nflow\nreaction\nlocation\ncontact\nbutton\ninteractive",
+   "options": "text\ndocument\nimage\nvideo\naudio\nflow\nreaction\nlocation\ncontact\nbutton\norder\ninteractive",
    "reqd": 1
   },
   {
@@ -144,17 +144,6 @@
    "fieldname": "attach",
    "fieldtype": "Attach",
    "label": "Attach"
-  },
-  {
-   "depends_on": "eval:(doc.content_type =='document');",
-   "fieldname": "filename",
-   "fieldtype": "Data",
-   "label": "Filename"
-  },
-  {
-   "fieldname": "body_param",
-   "fieldtype": "JSON",
-   "label": "Body Param"
   },
   {
    "fieldname": "section_break_iyjf",
@@ -202,11 +191,22 @@
    "fieldtype": "Data",
    "label": "Profile Name",
    "read_only": 1
+  },
+  {
+   "fieldname": "body_param",
+   "fieldtype": "JSON",
+   "label": "Body Param"
+  },
+  {
+   "default": "0",
+   "fieldname": "skip",
+   "fieldtype": "Check",
+   "label": "skip"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-20 15:13:42.233969",
+ "modified": "2025-12-01 05:40:34.381829",
  "modified_by": "Administrator",
  "module": "Frappe Whatsapp",
  "name": "WhatsApp Message",
