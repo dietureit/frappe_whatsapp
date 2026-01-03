@@ -231,6 +231,28 @@ def post():
 					"profile_name":sender_profile_name,
 					"whatsapp_account":whatsapp_account.name
 				}).insert(ignore_permissions=True)
+			elif message_type == "location":
+				# Handle location messages properly
+				location_data = message.get('location', {})
+				location_json = json.dumps({
+					"latitude": location_data.get('latitude'),
+					"longitude": location_data.get('longitude'),
+					"name": location_data.get('name', ''),
+					"address": location_data.get('address', ''),
+					"url": f"https://maps.google.com/?q={location_data.get('latitude')},{location_data.get('longitude')}" if location_data.get('latitude') and location_data.get('longitude') else ""
+				})
+				frappe.get_doc({
+					"doctype": "WhatsApp Message",
+					"type": "Incoming",
+					"from": message['from'],
+					"message": location_json,
+					"message_id": message['id'],
+					"reply_to_message_id": reply_to_message_id,
+					"is_reply": is_reply,
+					"content_type": "location",
+					"profile_name":sender_profile_name,
+					"whatsapp_account":whatsapp_account.name
+				}).insert(ignore_permissions=True)
 			else:
 				frappe.get_doc({
 					"doctype": "WhatsApp Message",
