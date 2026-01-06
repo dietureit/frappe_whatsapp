@@ -340,7 +340,7 @@ class WhatsAppMessage(Document):
             "message_id": self.message_id
         }
 
-        settings = frappe.get_doc(
+        settings = frappe.get_cached_doc(
             "WhatsApp Account",
             self.whatsapp_account,
         )
