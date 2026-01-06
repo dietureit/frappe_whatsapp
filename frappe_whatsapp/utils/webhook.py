@@ -119,12 +119,14 @@ def process_single_message(message, sender_profile_name, whatsapp_account):
 		frappe.log_error(title="WhatsApp Webhook - No Message Type", message=f"Message has no type: {json.dumps(message)}")
 		return
 	
+	meta_ts = get_message_timestamp(message)
+	
 	context = message.get('context', {})
 	is_reply = bool(context and 'forwarded' not in context and context.get('id'))
 	reply_to_message_id = context.get('id') if is_reply else None
 	
 	if message_type == 'text':
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -135,10 +137,10 @@ def process_single_message(message, sender_profile_name, whatsapp_account):
 			"content_type": message_type,
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 		
 	elif message_type == 'reaction':
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -148,16 +150,16 @@ def process_single_message(message, sender_profile_name, whatsapp_account):
 			"content_type": "reaction",
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 		
 	elif message_type == 'interactive':
-		process_interactive_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id)
+		process_interactive_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts)
 		
 	elif message_type in ["image", "audio", "video", "document"]:
-		process_media_message(message, message_type, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id)
+		process_media_message(message, message_type, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts)
 		
 	elif message_type == "button":
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -168,13 +170,13 @@ def process_single_message(message, sender_profile_name, whatsapp_account):
 			"content_type": message_type,
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 		
 	elif message_type == "location":
-		process_location_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id)
+		process_location_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts)
 		
 	elif message_type == "contacts":
-		process_contacts_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id)
+		process_contacts_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts)
 		
 	else:
 		# Handle unknown message types
@@ -184,7 +186,7 @@ def process_single_message(message, sender_profile_name, whatsapp_account):
 		else:
 			msg_content = str(message.get(message_type, ''))
 		
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -193,16 +195,16 @@ def process_single_message(message, sender_profile_name, whatsapp_account):
 			"content_type": message_type,
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 
 
-def process_interactive_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id):
+def process_interactive_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts=None):
 	"""Process interactive messages (buttons, lists, flows)."""
 	interactive_data = message['interactive']
 	interactive_type = interactive_data.get('type')
 
 	if interactive_type == 'button_reply':
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -213,10 +215,10 @@ def process_interactive_message(message, sender_profile_name, whatsapp_account, 
 			"content_type": "button",
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 		
 	elif interactive_type == 'list_reply':
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -227,7 +229,7 @@ def process_interactive_message(message, sender_profile_name, whatsapp_account, 
 			"content_type": "button",
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 		
 	elif interactive_type == 'nfm_reply':
 		nfm_reply = interactive_data['nfm_reply']
@@ -244,7 +246,7 @@ def process_interactive_message(message, sender_profile_name, whatsapp_account, 
 				summary_parts.append(f"{key}: {value}")
 		summary_message = ", ".join(summary_parts) if summary_parts else "Flow completed"
 
-		msg_doc = frappe.get_doc({
+		msg_doc = frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -256,7 +258,7 @@ def process_interactive_message(message, sender_profile_name, whatsapp_account, 
 			"flow_response": json.dumps(flow_response),
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 
 		frappe.publish_realtime(
 			"whatsapp_flow_response",
@@ -269,7 +271,7 @@ def process_interactive_message(message, sender_profile_name, whatsapp_account, 
 		)
 
 
-def process_media_message(message, message_type, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id):
+def process_media_message(message, message_type, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts=None):
 	"""Process media messages (image, audio, video, document)."""
 	token = whatsapp_account.get_password("token")
 	url = f"{whatsapp_account.url}/{whatsapp_account.version}/"
@@ -296,7 +298,7 @@ def process_media_message(message, message_type, sender_profile_name, whatsapp_a
 				file_data = media_response.content
 				file_name = f"{frappe.generate_hash(length=10)}.{file_extension}"
 
-				message_doc = frappe.get_doc({
+				message_doc = frappe.get_doc(apply_meta_timestamp({
 					"doctype": "WhatsApp Message",
 					"type": "Incoming",
 					"from": message['from'],
@@ -307,7 +309,7 @@ def process_media_message(message, message_type, sender_profile_name, whatsapp_a
 					"content_type": message_type,
 					"profile_name": sender_profile_name,
 					"whatsapp_account": whatsapp_account.name
-				}).insert(ignore_permissions=True)
+				}, meta_ts)).insert(ignore_permissions=True)
 
 				file = frappe.get_doc({
 					"doctype": "File",
@@ -338,7 +340,7 @@ def process_media_message(message, message_type, sender_profile_name, whatsapp_a
 	
 	# Create message even if media download failed
 	if not file_attached:
-		frappe.get_doc({
+		frappe.get_doc(apply_meta_timestamp({
 			"doctype": "WhatsApp Message",
 			"type": "Incoming",
 			"from": message['from'],
@@ -349,10 +351,10 @@ def process_media_message(message, message_type, sender_profile_name, whatsapp_a
 			"content_type": message_type,
 			"profile_name": sender_profile_name,
 			"whatsapp_account": whatsapp_account.name
-		}).insert(ignore_permissions=True)
+		}, meta_ts)).insert(ignore_permissions=True)
 
 
-def process_location_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id):
+def process_location_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts=None):
 	"""Process location messages."""
 	location_data = message.get('location', {})
 	
@@ -374,7 +376,7 @@ def process_location_message(message, sender_profile_name, whatsapp_account, is_
 		"url": maps_url
 	})
 	
-	frappe.get_doc({
+	frappe.get_doc(apply_meta_timestamp({
 		"doctype": "WhatsApp Message",
 		"type": "Incoming",
 		"from": message['from'],
@@ -385,10 +387,10 @@ def process_location_message(message, sender_profile_name, whatsapp_account, is_
 		"content_type": "location",
 		"profile_name": sender_profile_name,
 		"whatsapp_account": whatsapp_account.name
-	}).insert(ignore_permissions=True)
+	}, meta_ts)).insert(ignore_permissions=True)
 
 
-def process_contacts_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id):
+def process_contacts_message(message, sender_profile_name, whatsapp_account, is_reply, reply_to_message_id, meta_ts=None):
 	"""Process contacts messages."""
 	contacts_data = message.get('contacts', [])
 	
@@ -406,7 +408,7 @@ def process_contacts_message(message, sender_profile_name, whatsapp_account, is_
 	
 	contacts_json = json.dumps(contacts_summary)
 	
-	frappe.get_doc({
+	frappe.get_doc(apply_meta_timestamp({
 		"doctype": "WhatsApp Message",
 		"type": "Incoming",
 		"from": message['from'],
@@ -417,7 +419,7 @@ def process_contacts_message(message, sender_profile_name, whatsapp_account, is_
 		"content_type": "contact",
 		"profile_name": sender_profile_name,
 		"whatsapp_account": whatsapp_account.name
-	}).insert(ignore_permissions=True)
+	}, meta_ts)).insert(ignore_permissions=True)
 
 
 def update_status(data):
@@ -454,3 +456,22 @@ def update_message_status(data):
 			doc.save(ignore_permissions=True)
 	except Exception as e:
 		frappe.log_error(title="WhatsApp Status Update Error", message=f"Error: {str(e)}\nData: {json.dumps(data)}")
+
+
+def get_message_timestamp(message):
+	"""Convert Meta timestamp (seconds since epoch, UTC) to datetime."""
+	ts = message.get("timestamp")
+	if not ts:
+		return None
+	try:
+		return frappe.utils.datetime.datetime.fromtimestamp(int(ts))
+	except Exception:
+		return None
+
+
+def apply_meta_timestamp(doc_dict, meta_ts=None):
+	"""Attach meta timestamp to creation/modified if available."""
+	if meta_ts:
+		doc_dict["creation"] = meta_ts
+		doc_dict["modified"] = meta_ts
+	return doc_dict
