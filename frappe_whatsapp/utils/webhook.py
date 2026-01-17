@@ -44,15 +44,27 @@ def post():
 			data = json.loads(frappe.request.data)
 		except Exception:
 			pass
-	
-	# Log the incoming webhook data first (commit immediately to ensure it's saved)
+
+	from frappe_messenger.utils.ingest_queue import enqueue_ingest_payload
+
+	enqueue_ingest_payload("whatsapp", data)
+
+	# Always return 200 OK to Meta - this is critical for webhook health
+	return Response("OK", status=200)
+
+
+def process_payload(data: dict):
+	"""Process WhatsApp webhook payload off-request."""
+	if not data:
+		return
+
+	# Log the incoming webhook data (async path)
 	try:
 		frappe.get_doc({
 			"doctype": "WhatsApp Notification Log",
 			"template": "Webhook",
 			"meta_data": json.dumps(data)
 		}).insert(ignore_permissions=True)
-		frappe.db.commit()
 	except Exception as e:
 		frappe.log_error(title="WhatsApp Webhook Log Error", message=f"Failed to log webhook: {str(e)}\nData: {json.dumps(data)}")
 
@@ -67,7 +79,7 @@ def post():
 			messages = data["entry"][0]["changes"][0]["value"].get("messages", [])
 		except (KeyError, TypeError, IndexError):
 			messages = []
-	
+
 	sender_profile_name = next(
 		(
 			contact.get("profile", {}).get("name")
@@ -81,20 +93,18 @@ def post():
 	whatsapp_account = get_whatsapp_account(phone_id) if phone_id else None
 	if not whatsapp_account:
 		frappe.log_error(title="WhatsApp Webhook - No Account", message=f"No WhatsApp account found for phone_id: {phone_id}")
-		return Response("OK", status=200)
+		return
 
 	if messages:
 		for message in messages:
 			try:
 				process_single_message(message, sender_profile_name, whatsapp_account)
-				frappe.db.commit()
 			except Exception as e:
 				message_type = message.get('type', 'unknown')
 				frappe.log_error(
 					title=f"WhatsApp Webhook - Message Processing Error ({message_type})",
 					message=f"Error: {str(e)}\nMessage data: {json.dumps(message)}\nTraceback: {frappe.get_traceback()}"
 				)
-				frappe.db.rollback()
 				continue
 	else:
 		changes = None
@@ -107,9 +117,6 @@ def post():
 				changes = None
 		if changes:
 			update_status(changes)
-	
-	# Always return 200 OK to Meta - this is critical for webhook health
-	return Response("OK", status=200)
 
 
 def process_single_message(message, sender_profile_name, whatsapp_account):
