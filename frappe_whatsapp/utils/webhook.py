@@ -288,9 +288,13 @@ def update_message_status(data):
 	status = data['statuses'][0]['status']
 	conversation = data['statuses'][0].get('conversation', {}).get('id')
 	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id})
-	frappe.set_user("Administrator")
-	doc = frappe.get_doc("WhatsApp Message", name)
-	doc.status = status
+	
+	if not name:
+		return
+
+	update_dict = {"status": status}
 	if conversation:
-		doc.conversation_id = conversation
-	doc.save(ignore_permissions=True)
+		update_dict["conversation_id"] = conversation
+	
+	frappe.db.set_value("WhatsApp Message", name, update_dict, update_modified=True)
+	frappe.db.commit()
