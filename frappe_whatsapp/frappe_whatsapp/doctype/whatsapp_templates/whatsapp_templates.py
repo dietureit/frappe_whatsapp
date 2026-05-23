@@ -254,100 +254,108 @@ def fetch():
     """Fetch templates from meta."""
     """Later improve this code to pass a whatsapp account remove the js funcation so that it is called from whatsapp account doctype """
     whatsapp_accounts = frappe.get_all('WhatsApp Account', filters={'status': 'Active'}, fields=['name', 'token', 'url', 'version', 'business_id'])
+    if not whatsapp_accounts:
+        frappe.throw("No active WhatsApp Account found")
+
+    imported = 0
+    updated = 0
 
     for account in whatsapp_accounts:
         # get credentials
         token = frappe.get_doc("WhatsApp Account", account.name).get_password("token")
-        url = account.url
+        base_url = account.url
         version = account.version
         business_id = account.business_id
 
         headers = {"authorization": f"Bearer {token}", "content-type": "application/json"}
+        next_url = f"{base_url}/{version}/{business_id}/message_templates"
 
         try:
-            response = make_request(
-                "GET",
-                f"{url}/{version}/{business_id}/message_templates",
-                headers=headers,
-            )
+            while next_url:
+                response = make_request(
+                    "GET",
+                    next_url,
+                    headers=headers,
+                )
 
-            for template in response["data"]:
-                # set flag to insert or update
-                flags = 1
-                if frappe.db.exists("WhatsApp Templates", {"actual_name": template["name"]}):
-                    doc = frappe.get_doc("WhatsApp Templates", {"actual_name": template["name"]})
-                else:
-                    flags = 0
-                    doc = frappe.new_doc("WhatsApp Templates")
-                    doc.template_name = template["name"]
-                    doc.actual_name = template["name"]
+                for template in response.get("data", []):
+                    exists = frappe.db.exists("WhatsApp Templates", {"actual_name": template["name"]})
+                    if exists:
+                        doc = frappe.get_doc("WhatsApp Templates", {"actual_name": template["name"]})
+                        updated += 1
+                    else:
+                        doc = frappe.new_doc("WhatsApp Templates")
+                        doc.template_name = template["name"]
+                        doc.actual_name = template["name"]
+                        imported += 1
 
-                doc.status = template["status"]
-                doc.language_code = template["language"]
-                doc.category = template["category"]
-                doc.id = template["id"]
-                doc.whatsapp_account = account.name
+                    doc.status = template["status"]
+                    doc.language_code = template["language"]
+                    doc.category = template["category"]
+                    doc.id = template["id"]
+                    doc.whatsapp_account = account.name
+                    doc.header_type = None
+                    doc.header = None
+                    doc.footer = None
+                    doc.template = None
+                    doc.sample_values = None
+                    doc.set("buttons", [])
+                    frappe.db.delete("WhatsApp Button", {"parent": doc.name, "parenttype": "WhatsApp Templates"})
 
-                # update components
-                for component in template["components"]:
+                    # update components
+                    for component in template.get("components", []):
+                        # update header
+                        if component["type"] == "HEADER":
+                            doc.header_type = component.get("format")
 
-                    # update header
-                    if component["type"] == "HEADER":
-                        doc.header_type = component["format"]
+                            # if format is text update sample text
+                            if component.get("format") == "TEXT":
+                                doc.header = component.get("text")
+                        # Update footer text
+                        elif component["type"] == "FOOTER":
+                            doc.footer = component.get("text")
 
-                        # if format is text update sample text
-                        if component["format"] == "TEXT":
-                            doc.header = component["text"]
-                    # Update footer text
-                    elif component["type"] == "FOOTER":
-                        doc.footer = component["text"]
+                        # update template text
+                        elif component["type"] == "BODY":
+                            doc.template = component.get("text")
+                            example = component.get("example") or {}
+                            if example.get("body_text"):
+                                doc.sample_values = ",".join(example["body_text"][0])
 
-                    # update template text
-                    elif component["type"] == "BODY":
-                        doc.template = component["text"]
-                        if component.get("example"):
-    			            # Check if 'body_text' exists before trying to access it
-                            if component["example"].get("body_text"):
-                                doc.sample_values = ",".join(
-            	                    component["example"]["body_text"][0]
-                    	        )
+                        # Update buttons
+                        elif component["type"] == "BUTTONS":
+                            typeMap = {
+                                "URL": "Visit Website",
+                                "PHONE_NUMBER": "Call Phone",
+                                "QUICK_REPLY": "Quick Reply",
+                                "FLOW": "Flow"
+                            }
 
-                    # Update buttons
-                    elif component["type"] == "BUTTONS":
-                        doc.set("buttons", [])
-                        frappe.db.delete("WhatsApp Button", {"parent": doc.name, "parenttype": "WhatsApp Templates"})
-                        typeMap = {
-                            "URL": "Visit Website",
-                            "PHONE_NUMBER": "Call Phone",
-                            "QUICK_REPLY": "Quick Reply",
-                            "FLOW": "Flow"
-                        }
+                            for i, button in enumerate(component.get("buttons", []), start=1):
+                                btn = {}
+                                btn["button_type"] = typeMap.get(button["type"], button["type"])
+                                btn["button_label"] = button.get("text")
+                                btn["sequence"] = i
 
-                        for i, button in enumerate(component.get("buttons", []), start=1):
-                            btn = {}
-                            btn["button_type"] = typeMap[button["type"]]
-                            btn["button_label"] = button.get("text")
-                            btn["sequence"] = i
+                                if button["type"] == "URL":
+                                    btn["website_url"] = button.get("url")
+                                    if "{{" in (btn["website_url"] or ""):
+                                        btn["url_type"] = "Dynamic"
+                                    else:
+                                        btn["url_type"] = "Static"
 
-                            if button["type"] == "URL":
-                                btn["website_url"] = button.get("url")
-                                if "{{" in btn["website_url"]:
-                                    btn["url_type"] = "Dynamic"
-                                else:
-                                    btn["url_type"] = "Static"
+                                    if button.get("example"):
+                                        btn["example_url"] = ",".join(button["example"])
+                                elif button["type"] == "PHONE_NUMBER":
+                                    btn["phone_number"] = button.get("phone_number")
+                                elif button["type"] == "FLOW":
+                                    btn["flow"] = button.get("flow")
 
-                                if button.get("example"):
-                                    btn["example_url"] = ",".join(button["example"])
-                            elif button["type"] == "PHONE_NUMBER":
-                                btn["phone_number"] = button.get("phone_number")
-                            elif button["type"] == "FLOW":
-                                btn["flow"] = button.get("flow")
+                                doc.append("buttons", btn)
 
-                            doc.append("buttons", btn)
+                    upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
 
-                upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
-
-            return "Successfully fetched templates from meta"
+                next_url = (response.get("paging") or {}).get("next")
 
         except Exception as e:
             # Check if frappe.flags.integration_request is set and has a .json() method
@@ -365,6 +373,8 @@ def fetch():
             else:
                 # Handle cases where frappe.flags.integration_request doesn't exist or isn't a proper response object
                 frappe.throw(f"An unexpected server error occurred: {e}")
+
+    return f"Successfully fetched templates from meta. Imported: {imported}, Updated: {updated}"
 
 def upsert_doc_without_hooks(doc, child_dt, child_field):
     """Insert or update a parent document and its children without hooks."""
