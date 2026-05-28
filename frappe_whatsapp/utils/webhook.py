@@ -64,6 +64,8 @@ def post():
 	if not whatsapp_account:
 		return
 
+	enqueue_omni_channel_bridge(data)
+
 	if messages:
 		for message in messages:
 			message_type = message['type']
@@ -168,7 +170,7 @@ def post():
 							"whatsapp_account": whatsapp_account.name
 						}
 					)
-			elif message_type in ["image", "audio", "video", "document"]:
+			elif message_type in ["image", "audio", "video", "document", "sticker", "voice"]:
 				token = whatsapp_account.get_password("token")
 				url = f"{whatsapp_account.url}/{whatsapp_account.version}/"
 
@@ -182,8 +184,12 @@ def post():
 				if response.status_code == 200:
 					media_data = response.json()
 					media_url = media_data.get("url")
-					mime_type = media_data.get("mime_type")
-					file_extension = mime_type.split('/')[1]
+					mime_type = media_data.get("mime_type") or ""
+					if mime_type and "/" in mime_type:
+						file_extension = mime_type.split("/")[1].split(";")[0].strip()
+						file_extension = file_extension.replace("jpeg", "jpg")
+					else:
+						file_extension = "bin"
 
 					media_response = requests.get(media_url, headers=headers)
 					if media_response.status_code == 200:
@@ -254,12 +260,22 @@ def post():
 					"whatsapp_account":whatsapp_account.name
 				}).insert(ignore_permissions=True)
 			else:
+				node = message.get(message_type)
+				fallback_msg = ""
+				if isinstance(node, dict):
+					fallback_msg = (
+						node.get("caption")
+						or node.get("body")
+						or json.dumps(node)[:4900]
+					)
+				elif node is not None:
+					fallback_msg = str(node)
 				frappe.get_doc({
 					"doctype": "WhatsApp Message",
 					"type": "Incoming",
 					"from": message['from'],
 					"message_id": message['id'],
-					"message": message[message_type].get(message_type),
+					"message": fallback_msg or f"[{message_type}]",
 					"content_type" : message_type,
 					"profile_name":sender_profile_name,
 					"whatsapp_account":whatsapp_account.name
@@ -303,3 +319,20 @@ def update_message_status(data):
 	if conversation:
 		doc.conversation_id = conversation
 	doc.save(ignore_permissions=True)
+
+
+def enqueue_omni_channel_bridge(payload):
+	"""Forward webhook payload to omni_channel async pipeline if available."""
+	try:
+		if "omni_channel" not in frappe.get_installed_apps():
+			return
+
+		frappe.enqueue(
+			"omni_channel.api.webhook.process_provider_payload",
+			queue="short",
+			provider="whatsapp",
+			payload=payload,
+			headers=dict(frappe.request.headers or {}),
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Omni Channel Bridge Failure")
