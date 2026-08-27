@@ -325,6 +325,9 @@ def fetch():
 
                         for i, button in enumerate(component.get("buttons", []), start=1):
                             btn = {}
+                            if button["type"] not in typeMap:
+                                # Meta has button types this doctype has no option for (MPM, CATALOG, COPY_CODE, ...)
+                                continue
                             btn["button_type"] = typeMap[button["type"]]
                             btn["button_label"] = button.get("text")
                             btn["sequence"] = i
@@ -354,7 +357,7 @@ def fetch():
             if hasattr(frappe.flags.integration_request, 'json'):
                 try:
                     res = frappe.flags.integration_request.json().get("error", {})
-                    error_message = res.get("error_user_msg", res.get("message"))
+                    error_message = res.get("error_user_msg") or res.get("message") or str(e)
                     frappe.throw(
                         msg=error_message,
                         title=res.get("error_user_title", "Error"),
