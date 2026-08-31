@@ -3,10 +3,22 @@ import frappe
 import json
 import requests
 import time
+from datetime import datetime
 from werkzeug.wrappers import Response
 import frappe.utils
 
 from frappe_whatsapp.utils import get_whatsapp_account
+
+
+def provider_timestamp(message):
+	"""Meta unix seconds → datetime, or None."""
+	raw = message.get("timestamp")
+	if raw in (None, ""):
+		return None
+	try:
+		return datetime.fromtimestamp(int(raw))
+	except (TypeError, ValueError, OSError):
+		return None
 
 
 @frappe.whitelist(allow_guest=True)
@@ -78,6 +90,7 @@ def post():
 					"from": message['from'],
 					"message": message['text']['body'],
 					"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 					"reply_to_message_id": reply_to_message_id,
 					"is_reply": is_reply,
 					"content_type":message_type,
@@ -92,6 +105,7 @@ def post():
 					"message": message['reaction']['emoji'],
 					"reply_to_message_id": message['reaction']['message_id'],
 					"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 					"content_type": "reaction",
 					"profile_name":sender_profile_name,
 					"whatsapp_account":whatsapp_account.name
@@ -108,6 +122,7 @@ def post():
 						"from": message['from'],
 						"message": interactive_data['button_reply']['id'],
 						"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 						"reply_to_message_id": reply_to_message_id,
 						"is_reply": is_reply,
 						"content_type": "button",
@@ -122,6 +137,7 @@ def post():
 						"from": message['from'],
 						"message": interactive_data['list_reply']['id'],
 						"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 						"reply_to_message_id": reply_to_message_id,
 						"is_reply": is_reply,
 						"content_type": "button",
@@ -152,6 +168,7 @@ def post():
 						"from": message['from'],
 						"message": summary_message,
 						"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 						"reply_to_message_id": reply_to_message_id,
 						"is_reply": is_reply,
 						"content_type": "flow",
@@ -166,6 +183,7 @@ def post():
 						{
 							"phone": message['from'],
 							"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 							"flow_response": flow_response,
 							"whatsapp_account": whatsapp_account.name
 						}
@@ -202,6 +220,7 @@ def post():
 							"type": "Incoming",
 							"from": message['from'],
 							"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 							"reply_to_message_id": reply_to_message_id,
 							"is_reply": is_reply,
 							"message": message[message_type].get("caption", ""),
@@ -231,6 +250,7 @@ def post():
 					"from": message['from'],
 					"message": message['button']['text'],
 					"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 					"reply_to_message_id": reply_to_message_id,
 					"is_reply": is_reply,
 					"content_type": message_type,
@@ -253,6 +273,7 @@ def post():
 					"from": message['from'],
 					"message": location_json,
 					"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 					"reply_to_message_id": reply_to_message_id,
 					"is_reply": is_reply,
 					"content_type": "location",
@@ -275,6 +296,7 @@ def post():
 					"type": "Incoming",
 					"from": message['from'],
 					"message_id": message['id'],
+					"provider_timestamp": provider_timestamp(message),
 					"message": fallback_msg or f"[{message_type}]",
 					"content_type" : message_type,
 					"profile_name":sender_profile_name,

@@ -20,6 +20,7 @@
   "message",
   "message_type",
   "message_id",
+  "provider_timestamp",
   "conversation_id",
   "content_type",
   "attach",
@@ -132,6 +133,13 @@
    "fieldtype": "Data",
    "label": "Message ID",
    "read_only": 1
+  },
+  {
+   "fieldname": "provider_timestamp",
+   "fieldtype": "Datetime",
+   "label": "Provider Timestamp",
+   "read_only": 1,
+   "description": "When Meta says the customer sent or the event occurred (webhook timestamp)."
   },
   {
    "fieldname": "conversation_id",
